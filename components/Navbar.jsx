@@ -1,0 +1,2 @@
+import Link from "next/link";
+export default function Navbar(){return <nav className="nav"><Link href="/" className="logo"><span className="mark">T</span>Tanzai AI</Link><div className="links"><Link href="/chat">Chat</Link><Link href="/tools">Tools</Link><Link href="/agents">Agents</Link><Link href="/pricing">Pricing</Link></div><div className="actions"><Link className="btn" href="/login">Login</Link><Link className="btn primary" href="/signup">Start Free</Link></div></nav>}
