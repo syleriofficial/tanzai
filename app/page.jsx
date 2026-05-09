@@ -1,68 +1,18 @@
-"use client";
-
-import {useState} from "react";
-
-export default function Home(){
-
-const [prompt,setPrompt] = useState("");
-const [reply,setReply] = useState("");
-
-async function askAI(){
-
- setReply("Syleri Engine is thinking...");
-
- const response = await fetch("/api/chat",{
-  method:"POST",
-  headers:{
-   "Content-Type":"application/json"
-  },
-  body:JSON.stringify({
-   messages:[
-    {
-     role:"user",
-     content:prompt
-    }
-   ]
-  })
- });
-
- const data = await response.json();
-
- setReply(data.reply || "No response");
-}
-
-return(
- <main className="main">
-
-  <div className="title">
-   Tanzai AI 🚀
-  </div>
-
-  <div className="sub">
-   Powered by Syleri Engine • Built by Syleri
-  </div>
-
-  <div className="chat">
-
-   <textarea
-    placeholder="Message Tanzai AI..."
-    value={prompt}
-    onChange={(e)=>setPrompt(e.target.value)}
-   />
-
-   <button onClick={askAI}>
-    Ask Tanzai AI
-   </button>
-
-   {reply && (
-    <div className="reply">
-      {reply}
-    </div>
-   )}
-
-  </div>
-
- </main>
-)
-
+export default function Home() {
+  return (
+    <main style={{
+      minHeight: "100vh",
+      background: "#020617",
+      color: "white",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontFamily: "sans-serif"
+    }}>
+      <div>
+        <h1 style={{fontSize:"64px"}}>Tanzai AI V9 🚀</h1>
+        <p>Powered by Syleri Engine</p>
+      </div>
+    </main>
+  );
 }
