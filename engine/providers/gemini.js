@@ -1,1 +1,0 @@
-export async function askGemini(){ return 'Gemini Connected'; }
