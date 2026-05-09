@@ -1,1 +1,0 @@
-export async function POST(req){const formData=await req.formData();const file=formData.get("file");return Response.json({ok:true,message:"Upload API stub ready. Storage connection will be added in next build.",filename:file?.name||"unknown"})}
