@@ -1,0 +1,1 @@
+import {generateReply} from "@/engine/chat";export async function POST(req){const body=await req.json();const reply=await generateReply(body.messages||[]);return Response.json({reply});}
