@@ -1,1 +1,0 @@
-export const ENGINE={company:"Syleri",engine:"Syleri Engine",product:"Tanzai AI",api:"Syleri API",defaultModel:process.env.OPENROUTER_MODEL||"openrouter/auto"};
