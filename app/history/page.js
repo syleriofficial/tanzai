@@ -1,2 +1,0 @@
-import Sidebar from "@/components/Sidebar";import { listChatsPlaceholder } from "@/lib/chatStore";
-export default async function History(){const chats=await listChatsPlaceholder();return <div className="shell"><Sidebar/><main className="main"><div className="top"><div><b>Chat History</b><br/><span className="small">Firestore placeholder. Real storage comes next.</span></div></div><div className="grid">{chats.map(c=><div className="card" key={c.id}><h3>{c.title}</h3><p>{c.updatedAt}</p><button className="btn">Open</button></div>)}</div></main></div>}
