@@ -1,47 +1,33 @@
-*{
-  margin:0;
-  padding:0;
-  box-sizing:border-box;
-}
-
-body{
-  background:#050816;
-  color:white;
-  font-family:Arial,sans-serif;
-}
-
-.container{
-  min-height:100vh;
-  display:flex;
-  flex-direction:column;
-  justify-content:center;
-  align-items:center;
-  padding:20px;
-  text-align:center;
-}
-
-.title{
-  font-size:72px;
-  font-weight:700;
-  background:linear-gradient(90deg,#00d4ff,#7b61ff);
-  -webkit-background-clip:text;
-  -webkit-text-fill-color:transparent;
-}
-
-.subtitle{
-  margin-top:20px;
-  color:#cbd5e1;
-  max-width:700px;
-  line-height:1.6;
-  font-size:20px;
-}
-
-.button{
-  margin-top:30px;
-  background:linear-gradient(90deg,#00d4ff,#7b61ff);
-  padding:14px 30px;
-  border-radius:14px;
-  color:white;
-  text-decoration:none;
-  font-weight:bold;
-}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#050611;color:white;font-family:Arial,Helvetica,sans-serif}
+.app{min-height:100vh;display:grid;grid-template-columns:285px 1fr;background:radial-gradient(circle at top left,rgba(0,212,255,.18),transparent 30%),radial-gradient(circle at top right,rgba(123,97,255,.18),transparent 30%),#050611}
+.sidebar{border-right:1px solid rgba(255,255,255,.1);padding:20px;background:rgba(255,255,255,.04)}
+.logo{width:44px;height:44px;border-radius:15px;background:linear-gradient(135deg,#00d4ff,#7b61ff);display:grid;place-items:center;font-weight:900}
+.brand{display:flex;align-items:center;gap:12px;margin-bottom:22px}
+.brand h1{font-size:21px}.brand p{font-size:12px;color:#94a3b8}
+.new{width:100%;border:1px solid rgba(255,255,255,.14);background:linear-gradient(135deg,rgba(0,212,255,.18),rgba(123,97,255,.18));color:white;border-radius:16px;padding:13px;font-weight:700;cursor:pointer}
+.label{margin:25px 0 10px;color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:.14em}
+.item{padding:12px;border-radius:14px;background:rgba(255,255,255,.05);margin-bottom:8px;color:#cbd5e1;font-size:14px}
+.sidefoot{margin-top:40px;border-top:1px solid rgba(255,255,255,.1);padding-top:18px;color:#94a3b8;font-size:12px;line-height:1.7}
+.main{min-width:0;display:flex;flex-direction:column}
+.top{height:76px;border-bottom:1px solid rgba(255,255,255,.1);display:flex;align-items:center;justify-content:space-between;padding:0 28px;background:rgba(5,6,17,.65);backdrop-filter:blur(12px)}
+.badge,.pill{border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);border-radius:999px;padding:9px 13px;color:#dbeafe;font-size:13px}
+.pills{display:flex;gap:10px}
+.wrap{max-width:980px;width:100%;margin:0 auto;padding:34px 22px;display:flex;flex-direction:column;min-height:calc(100vh - 76px)}
+.hero{text-align:center;padding:34px 0}
+.hero h2{font-size:clamp(48px,8vw,86px);letter-spacing:-.06em;background:linear-gradient(90deg,#fff,#b6f1ff,#a294ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.hero p{max-width:720px;margin:16px auto;color:#a9b6d2;line-height:1.7;font-size:18px}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:22px}
+.card{border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.05);padding:18px;border-radius:22px;line-height:1.6;color:#cbd5e1}
+.card strong{display:block;color:#fff;margin-bottom:8px}
+.messages{display:flex;flex-direction:column;gap:14px;margin-top:10px}
+.msg{border:1px solid rgba(255,255,255,.09);border-radius:20px;padding:16px 18px;line-height:1.65;white-space:pre-wrap}
+.user{align-self:flex-end;max-width:78%;background:linear-gradient(135deg,rgba(0,212,255,.18),rgba(123,97,255,.18))}
+.ai{align-self:flex-start;max-width:88%;background:rgba(255,255,255,.055)}
+.composer{margin-top:auto;position:sticky;bottom:0;background:linear-gradient(180deg,transparent,#050611 30%);padding-top:24px}
+.input{display:flex;gap:10px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);border-radius:24px;padding:12px}
+textarea{flex:1;background:transparent;border:0;outline:0;color:white;resize:none;min-height:52px;padding:13px;font-size:15px}
+.send{width:52px;height:52px;border:0;border-radius:18px;background:linear-gradient(135deg,#00d4ff,#7b61ff);color:#fff;font-weight:900;cursor:pointer}
+.note{text-align:center;color:#64748b;font-size:12px;margin-top:12px}
+footer{text-align:center;color:#64748b;font-size:12px;padding:24px 0}
+@media(max-width:860px){.app{grid-template-columns:1fr}.sidebar{display:none}.top{height:auto;padding:16px;align-items:flex-start;flex-direction:column}.cards{grid-template-columns:1fr}.hero{text-align:left}.user,.ai{max-width:100%}.wrap{padding:20px 14px}.pills{flex-wrap:wrap}}
