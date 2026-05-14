@@ -9,270 +9,421 @@ import {
   Brain,
   User,
   Menu,
-  Square,
   MessageSquare,
-  Mic,
-  ImagePlus,
-  X,
-  Volume2
+  LogOut,
+  ThumbsUp,
+  ThumbsDown,
+  Save,
+  Database,
+  KeyRound
 } from "lucide-react";
+import { supabase, supabaseReady } from "./supabaseClient";
 import "./style.css";
 
-const ENGINE_URL = "https://engine.syleri.com";
+const ENGINE_URL =
+  import.meta.env.VITE_SYLERI_ENGINE_URL || "https://engine.syleri.com";
 
-function createChat(title = "New Chat") {
+function fallbackChat() {
   return {
-    id: Date.now() + Math.floor(Math.random() * 9999),
-    title,
+    id: "local-" + Date.now(),
+    title: "Welcome chat",
     messages: [
       {
-        role: "bot",
-        text: "Namaste, main Tanzai AI hoon. Aap text, voice aur image ke saath baat kar sakte ho."
+        id: "local-msg-" + Date.now(),
+        role: "assistant",
+        content: "Namaste, main Tanzai AI hoon. Supabase cloud memory ready hai."
       }
     ]
   };
 }
 
+function AuthScreen() {
+  const [mode, setMode] = useState("signin");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [status, setStatus] = useState("");
+
+  async function submit(e) {
+    e.preventDefault();
+    setStatus("");
+
+    if (!supabaseReady) {
+      setStatus("Supabase env variables missing.");
+      return;
+    }
+
+    const action =
+      mode === "signin"
+        ? supabase.auth.signInWithPassword({ email, password })
+        : supabase.auth.signUp({ email, password });
+
+    const { error } = await action;
+
+    if (error) {
+      setStatus(error.message);
+    } else {
+      setStatus(mode === "signin" ? "Signed in." : "Signup done. Check email if confirmation is enabled.");
+    }
+  }
+
+  return (
+    <div className="authPage">
+      <div className="authCard">
+        <div className="authLogo">
+          <Sparkles size={28} />
+        </div>
+        <h1>Tanzai AI</h1>
+        <p>Cloud memory + chat history powered by Supabase and Syleri Engine.</p>
+
+        <form onSubmit={submit}>
+          <label>Email</label>
+          <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@email.com" />
+
+          <label>Password</label>
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="minimum 6 characters" />
+
+          <button type="submit">
+            <KeyRound size={18} />
+            {mode === "signin" ? "Sign in" : "Create account"}
+          </button>
+        </form>
+
+        <button className="ghostBtn" onClick={() => setMode(mode === "signin" ? "signup" : "signin")}>
+          {mode === "signin" ? "Need account? Sign up" : "Already have account? Sign in"}
+        </button>
+
+        {status && <div className="statusBox">{status}</div>}
+
+        {!supabaseReady && (
+          <div className="warningBox">
+            Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Cloud Run variables.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function App() {
+  const [session, setSession] = useState(null);
+  const [loadingApp, setLoadingApp] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [memoryOpen, setMemoryOpen] = useState(false);
   const [input, setInput] = useState("");
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [listening, setListening] = useState(false);
-  const [image, setImage] = useState(null);
-  const [imagePreview, setImagePreview] = useState("");
-  const stopRef = useRef(false);
+  const [generating, setGenerating] = useState(false);
+  const [chats, setChats] = useState([fallbackChat()]);
+  const [activeChatId, setActiveChatId] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [memories, setMemories] = useState([]);
+  const [memoryText, setMemoryText] = useState("");
   const bottomRef = useRef(null);
-  const recognitionRef = useRef(null);
 
-  const [chats, setChats] = useState(() => {
-    const saved = localStorage.getItem("tanzai_multimodal_chats");
-    return saved ? JSON.parse(saved) : [createChat("Welcome chat")];
-  });
-
-  const [activeChatId, setActiveChatId] = useState(() => {
-    const saved = localStorage.getItem("tanzai_multimodal_active");
-    return saved ? Number(saved) : null;
-  });
+  const user = session?.user || null;
 
   const activeChat = useMemo(() => {
     return chats.find((c) => c.id === activeChatId) || chats[0];
   }, [chats, activeChatId]);
 
   useEffect(() => {
-    if (!activeChat && chats.length > 0) setActiveChatId(chats[0].id);
-  }, [activeChat, chats]);
+    async function init() {
+      if (!supabaseReady) {
+        setLoadingApp(false);
+        return;
+      }
+
+      const { data } = await supabase.auth.getSession();
+      setSession(data.session);
+
+      const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+        setSession(newSession);
+      });
+
+      setLoadingApp(false);
+
+      return () => listener.subscription.unsubscribe();
+    }
+
+    init();
+  }, []);
 
   useEffect(() => {
-    localStorage.setItem("tanzai_multimodal_chats", JSON.stringify(chats));
-  }, [chats]);
+    if (user) {
+      loadCloudData();
+    }
+  }, [user?.id]);
 
   useEffect(() => {
-    if (activeChat?.id) localStorage.setItem("tanzai_multimodal_active", String(activeChat.id));
-  }, [activeChat]);
+    if (activeChat?.id) setActiveChatId(activeChat.id);
+  }, [activeChat?.id]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [activeChat?.messages, isGenerating]);
+  }, [activeChat?.messages, generating]);
 
-  function updateActiveChat(updater) {
-    setChats((prev) =>
-      prev.map((chat) => (chat.id === activeChat.id ? updater(chat) : chat))
-    );
+  async function loadCloudData() {
+    if (!user || !supabaseReady) return;
+
+    const { data: profileData } = await supabase
+      .from("tanzai_profiles")
+      .select("*")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    setProfile(profileData);
+
+    const { data: chatData } = await supabase
+      .from("tanzai_chats")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("updated_at", { ascending: false });
+
+    if (!chatData || chatData.length === 0) {
+      const { data: newChat } = await supabase
+        .from("tanzai_chats")
+        .insert({ user_id: user.id, title: "Welcome chat" })
+        .select()
+        .single();
+
+      await supabase.from("tanzai_messages").insert({
+        chat_id: newChat.id,
+        user_id: user.id,
+        role: "assistant",
+        content: "Namaste, main Tanzai AI hoon. Aapki cloud history ready hai."
+      });
+
+      return loadCloudData();
+    }
+
+    const chatIds = chatData.map((c) => c.id);
+
+    const { data: messageData } = await supabase
+      .from("tanzai_messages")
+      .select("*")
+      .in("chat_id", chatIds)
+      .order("created_at", { ascending: true });
+
+    const mapped = chatData.map((chat) => ({
+      ...chat,
+      messages: (messageData || [])
+        .filter((m) => m.chat_id === chat.id)
+        .map((m) => ({
+          id: m.id,
+          role: m.role === "assistant" ? "assistant" : "user",
+          content: m.content
+        }))
+    }));
+
+    setChats(mapped);
+    setActiveChatId(mapped[0]?.id);
+
+    const { data: memData } = await supabase
+      .from("tanzai_memories")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("importance", { ascending: false });
+
+    setMemories(memData || []);
   }
 
-  function newChat() {
-    const chat = createChat();
+  async function newChat() {
+    if (!user || !supabaseReady) return;
+
+    const { data } = await supabase
+      .from("tanzai_chats")
+      .insert({ user_id: user.id, title: "New Chat" })
+      .select()
+      .single();
+
+    const welcome = await supabase
+      .from("tanzai_messages")
+      .insert({
+        chat_id: data.id,
+        user_id: user.id,
+        role: "assistant",
+        content: "New chat started. Ask Tanzai AI anything."
+      })
+      .select()
+      .single();
+
+    const chat = {
+      ...data,
+      messages: [
+        {
+          id: welcome.data.id,
+          role: "assistant",
+          content: welcome.data.content
+        }
+      ]
+    };
+
     setChats((prev) => [chat, ...prev]);
     setActiveChatId(chat.id);
   }
 
-  function deleteChat(id) {
-    const next = chats.filter((chat) => chat.id !== id);
-    if (next.length === 0) {
-      const fresh = createChat();
-      setChats([fresh]);
-      setActiveChatId(fresh.id);
-      return;
-    }
+  async function deleteChat(id) {
+    if (!supabaseReady) return;
+    await supabase.from("tanzai_chats").delete().eq("id", id);
+    const next = chats.filter((c) => c.id !== id);
     setChats(next);
-    if (id === activeChat.id) setActiveChatId(next[0].id);
+    if (next.length) setActiveChatId(next[0].id);
+    else await newChat();
+  }
+
+  function buildMemoryPrompt(text) {
+    const memoryBlock = memories.map((m) => `- ${m.content}`).join("\n");
+    return `User message: ${text}
+
+User profile:
+Name/email: ${profile?.display_name || user?.email || "unknown"}
+Preferred language: ${profile?.preferred_language || "Hinglish / Hindi"}
+Tone: ${profile?.tone || "clear and helpful"}
+Goals: ${profile?.goals || "Build Tanzai AI"}
+
+Saved memories:
+${memoryBlock || "- No memory saved yet."}
+
+Reply naturally in user's language and use memory only when useful.`;
+  }
+
+  async function saveMessage(role, content, chatId = activeChat.id) {
+    const { data } = await supabase
+      .from("tanzai_messages")
+      .insert({
+        chat_id: chatId,
+        user_id: user.id,
+        role,
+        content
+      })
+      .select()
+      .single();
+
+    return data;
+  }
+
+  async function sendMessage() {
+    const text = input.trim();
+    if (!text || generating || !activeChat || !user || !supabaseReady) return;
+
+    setInput("");
+    setGenerating(true);
+
+    const userMsg = { id: "temp-user-" + Date.now(), role: "user", content: text };
+    const tempBot = { id: "temp-bot-" + Date.now(), role: "assistant", content: "Tanzai thinking..." };
+
+    setChats((prev) =>
+      prev.map((chat) =>
+        chat.id === activeChat.id
+          ? {
+              ...chat,
+              title: chat.title === "New Chat" || chat.title === "Welcome chat" ? text.slice(0, 38) : chat.title,
+              messages: [...chat.messages, userMsg, tempBot]
+            }
+          : chat
+      )
+    );
+
+    try {
+      await saveMessage("user", text);
+
+      await supabase
+        .from("tanzai_chats")
+        .update({
+          title: activeChat.title === "New Chat" || activeChat.title === "Welcome chat" ? text.slice(0, 38) : activeChat.title,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", activeChat.id);
+
+      const res = await fetch(`${ENGINE_URL}/api/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: buildMemoryPrompt(text) })
+      });
+
+      const data = await res.json();
+      const reply = data.reply || "Tanzai AI reply unavailable.";
+
+      const savedBot = await saveMessage("assistant", reply);
+
+      setChats((prev) =>
+        prev.map((chat) =>
+          chat.id === activeChat.id
+            ? {
+                ...chat,
+                messages: chat.messages.map((m) =>
+                  m.id === tempBot.id
+                    ? { id: savedBot.id, role: "assistant", content: reply }
+                    : m
+                )
+              }
+            : chat
+        )
+      );
+    } catch (error) {
+      setChats((prev) =>
+        prev.map((chat) =>
+          chat.id === activeChat.id
+            ? {
+                ...chat,
+                messages: chat.messages.map((m) =>
+                  m.id === tempBot.id
+                    ? { ...m, content: "Syleri Engine or Supabase error." }
+                    : m
+                )
+              }
+            : chat
+        )
+      );
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  async function saveMemory() {
+    const content = memoryText.trim();
+    if (!content || !user || !supabaseReady) return;
+
+    const { data } = await supabase
+      .from("tanzai_memories")
+      .insert({
+        user_id: user.id,
+        memory_type: "manual",
+        content,
+        importance: 8
+      })
+      .select()
+      .single();
+
+    setMemories((prev) => [data, ...prev]);
+    setMemoryText("");
+  }
+
+  async function deleteMemory(id) {
+    await supabase.from("tanzai_memories").delete().eq("id", id);
+    setMemories((prev) => prev.filter((m) => m.id !== id));
+  }
+
+  async function feedback(messageId, rating) {
+    if (!messageId || String(messageId).startsWith("temp")) return;
+
+    await supabase.from("tanzai_feedback").insert({
+      user_id: user.id,
+      message_id: messageId,
+      rating
+    });
   }
 
   function copyText(text) {
     navigator.clipboard.writeText(text);
   }
 
-  function speakText(text) {
-    if (!("speechSynthesis" in window)) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = "hi-IN";
-    utterance.rate = 1;
-    window.speechSynthesis.speak(utterance);
+  async function signOut() {
+    await supabase.auth.signOut();
+    setSession(null);
   }
 
-  function startVoiceInput() {
-    const SpeechRecognition =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (loadingApp) return <div className="loading">Loading Tanzai AI...</div>;
 
-    if (!SpeechRecognition) {
-      alert("Voice input is not supported in this browser. Chrome use karo.");
-      return;
-    }
-
-    if (listening && recognitionRef.current) {
-      recognitionRef.current.stop();
-      setListening(false);
-      return;
-    }
-
-    const recognition = new SpeechRecognition();
-    recognition.lang = "hi-IN";
-    recognition.interimResults = true;
-    recognition.continuous = false;
-
-    recognition.onstart = () => setListening(true);
-
-    recognition.onresult = (event) => {
-      let transcript = "";
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        transcript += event.results[i][0].transcript;
-      }
-      setInput(transcript);
-    };
-
-    recognition.onerror = () => setListening(false);
-    recognition.onend = () => setListening(false);
-
-    recognitionRef.current = recognition;
-    recognition.start();
-  }
-
-  function handleImageUpload(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setImage(file);
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      setImagePreview(reader.result);
-    };
-    reader.readAsDataURL(file);
-  }
-
-  function removeImage() {
-    setImage(null);
-    setImagePreview("");
-  }
-
-  async function typeReply(fullText) {
-    const chars = fullText.split("");
-    let current = "";
-
-    for (let i = 0; i < chars.length; i++) {
-      if (stopRef.current) break;
-
-      current += chars[i];
-
-      updateActiveChat((chat) => {
-        const nextMessages = [...chat.messages];
-        const lastIndex = nextMessages.length - 1;
-
-        if (nextMessages[lastIndex]?.streaming) {
-          nextMessages[lastIndex] = {
-            role: "bot",
-            text: current,
-            streaming: true
-          };
-        }
-
-        return { ...chat, messages: nextMessages };
-      });
-
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    }
-
-    updateActiveChat((chat) => {
-      const nextMessages = [...chat.messages];
-      const lastIndex = nextMessages.length - 1;
-
-      if (nextMessages[lastIndex]?.streaming) {
-        nextMessages[lastIndex] = {
-          role: "bot",
-          text: current || "Stopped."
-        };
-      }
-
-      return { ...chat, messages: nextMessages };
-    });
-  }
-
-  async function sendMessage() {
-    const text = input.trim();
-    if ((!text && !imagePreview) || isGenerating || !activeChat) return;
-
-    stopRef.current = false;
-    setIsGenerating(true);
-
-    const userText = text || "Analyze this image.";
-    const imageData = imagePreview;
-
-    updateActiveChat((chat) => ({
-      ...chat,
-      title:
-        chat.title === "New Chat" || chat.title === "Welcome chat"
-          ? userText.slice(0, 34)
-          : chat.title,
-      messages: [
-        ...chat.messages,
-        {
-          role: "user",
-          text: userText,
-          image: imageData
-        },
-        {
-          role: "bot",
-          text: "",
-          streaming: true
-        }
-      ]
-    }));
-
-    setInput("");
-    setImage(null);
-    setImagePreview("");
-
-    try {
-      const prompt = imageData
-        ? `${userText}\n\nUser attached an image. Current Syleri Engine text endpoint does not yet process raw image data. Reply with guidance based on the user's text and ask them to describe the image if needed.`
-        : userText;
-
-      const res = await fetch(`${ENGINE_URL}/api/chat`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          message: prompt,
-          image: imageData
-        })
-      });
-
-      const data = await res.json();
-      await typeReply(data.reply || "Tanzai AI reply unavailable.");
-    } catch (error) {
-      await typeReply("Syleri Engine connection error.");
-    } finally {
-      setIsGenerating(false);
-      stopRef.current = false;
-    }
-  }
-
-  function stopGenerating() {
-    stopRef.current = true;
-    setIsGenerating(false);
-  }
+  if (!session) return <AuthScreen />;
 
   return (
     <div className="app">
@@ -283,7 +434,7 @@ function App() {
           </div>
           <div>
             <h1>Tanzai AI</h1>
-            <p>Multimodal V6</p>
+            <p>Cloud Memory V7</p>
           </div>
         </div>
 
@@ -292,19 +443,20 @@ function App() {
           New Chat
         </button>
 
+        <button className="memoryBtn" onClick={() => setMemoryOpen(true)}>
+          <Database size={18} />
+          Cloud Memory
+        </button>
+
         <div className="smallTitle">Recent Chats</div>
 
         <div className="chatList">
           {chats.map((chat) => (
-            <div
-              key={chat.id}
-              className={`chatItem ${chat.id === activeChat?.id ? "active" : ""}`}
-            >
+            <div key={chat.id} className={`chatItem ${chat.id === activeChat?.id ? "active" : ""}`}>
               <button onClick={() => setActiveChatId(chat.id)}>
                 <MessageSquare size={15} />
                 <span>{chat.title}</span>
               </button>
-
               <button className="danger" onClick={() => deleteChat(chat.id)}>
                 <Trash2 size={14} />
               </button>
@@ -312,10 +464,10 @@ function App() {
           ))}
         </div>
 
-        <div className="engineStatus">
-          <span></span>
-          Engine: {ENGINE_URL}
-        </div>
+        <button className="logoutBtn" onClick={signOut}>
+          <LogOut size={16} />
+          Sign out
+        </button>
       </aside>
 
       <main className="main">
@@ -326,10 +478,10 @@ function App() {
 
           <div>
             <h2>Tanzai AI</h2>
-            <p>Text + Voice + Image interface powered by Syleri Engine</p>
+            <p>Supabase cloud memory + Syleri Engine</p>
           </div>
 
-          <button className="profileBtn">
+          <button className="profileBtn" onClick={() => setMemoryOpen(true)}>
             <User size={18} />
           </button>
         </header>
@@ -337,99 +489,108 @@ function App() {
         <section className="hero">
           <div className="pill">
             <Brain size={16} />
-            Multimodal Interface Active
+            Cloud Memory Active
           </div>
-          <h3>Talk. Upload. Create.</h3>
+          <h3>Train the future Syleri Engine.</h3>
           <p>
-            Tanzai AI ab voice input, image upload preview, streaming response aur chat history ke saath ready hai.
+            Chats, memory and feedback save hote hain. Ye future me better routing, personalization aur training dataset ka foundation banega.
           </p>
-
-          <div className="featureRow">
-            <span>🎤 Voice Input</span>
-            <span>🖼 Image Upload</span>
-            <span>⚡ Streaming</span>
-            <span>💾 History</span>
-          </div>
         </section>
 
         <section className="messages">
-          {activeChat?.messages.map((msg, index) => (
-            <div key={index} className={`messageRow ${msg.role}`}>
+          {activeChat?.messages?.map((msg) => (
+            <div key={msg.id} className={`messageRow ${msg.role === "assistant" ? "bot" : "user"}`}>
               <div className="avatar">
-                {msg.role === "bot" ? <Sparkles size={16} /> : <User size={16} />}
+                {msg.role === "assistant" ? <Sparkles size={16} /> : <User size={16} />}
               </div>
 
               <div className="bubble">
-                {msg.image && <img className="bubbleImage" src={msg.image} alt="uploaded" />}
-                <p>
-                  {msg.text}
-                  {msg.streaming && <span className="cursor">|</span>}
-                </p>
+                <p>{msg.content}</p>
 
-                {msg.role === "bot" && msg.text && (
+                {msg.role === "assistant" && (
                   <div className="messageActions">
-                    <button className="copyBtn" onClick={() => copyText(msg.text)}>
+                    <button className="copyBtn" onClick={() => copyText(msg.content)}>
                       <Copy size={14} />
                       Copy
                     </button>
-                    <button className="copyBtn" onClick={() => speakText(msg.text)}>
-                      <Volume2 size={14} />
-                      Speak
+                    <button className="copyBtn" onClick={() => feedback(msg.id, "good")}>
+                      <ThumbsUp size={14} />
+                      Good
+                    </button>
+                    <button className="copyBtn" onClick={() => feedback(msg.id, "bad")}>
+                      <ThumbsDown size={14} />
+                      Bad
                     </button>
                   </div>
                 )}
               </div>
             </div>
           ))}
-
           <div ref={bottomRef}></div>
         </section>
 
-        {imagePreview && (
-          <div className="imagePreview">
-            <img src={imagePreview} alt="preview" />
-            <button onClick={removeImage}>
-              <X size={16} />
-            </button>
-          </div>
-        )}
-
         <footer className="composer">
-          <label className="toolBtn">
-            <ImagePlus size={20} />
-            <input type="file" accept="image/*" onChange={handleImageUpload} />
-          </label>
-
-          <button
-            className={`toolBtn ${listening ? "listening" : ""}`}
-            onClick={startVoiceInput}
-          >
-            <Mic size={20} />
-          </button>
-
           <input
             value={input}
-            disabled={isGenerating}
+            disabled={generating}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") sendMessage();
             }}
-            placeholder={isGenerating ? "Tanzai is generating..." : "Ask Tanzai AI..."}
+            placeholder={generating ? "Tanzai is thinking..." : "Ask Tanzai AI..."}
           />
 
-          {isGenerating ? (
-            <button className="stopBtn" onClick={stopGenerating}>
-              <Square size={17} />
-              Stop
-            </button>
-          ) : (
-            <button className="sendBtn" onClick={sendMessage}>
-              <Send size={18} />
-              Send
-            </button>
-          )}
+          <button onClick={sendMessage} disabled={generating}>
+            <Send size={18} />
+            Send
+          </button>
         </footer>
       </main>
+
+      {memoryOpen && (
+        <div className="modalOverlay">
+          <div className="memoryModal">
+            <div className="modalHead">
+              <div>
+                <h2>Cloud Memory</h2>
+                <p>Stored securely in Supabase for this signed-in user.</p>
+              </div>
+              <button className="iconBtn" onClick={() => setMemoryOpen(false)}>×</button>
+            </div>
+
+            <div className="profileBox">
+              <h3>{profile?.display_name || user.email}</h3>
+              <p>{profile?.preferred_language || "Hinglish / Hindi"} · {profile?.tone || "clear helpful"}</p>
+            </div>
+
+            <div className="addNote">
+              <textarea
+                value={memoryText}
+                onChange={(e) => setMemoryText(e.target.value)}
+                placeholder="Save memory: User likes Hindi replies, working on Syleri Engine..."
+              />
+              <button onClick={saveMemory}>
+                <Save size={16} />
+                Save
+              </button>
+            </div>
+
+            <div className="notes">
+              {memories.map((m) => (
+                <div className="note" key={m.id}>
+                  <div>
+                    <p>{m.content}</p>
+                    <small>Importance {m.importance} · {m.memory_type}</small>
+                  </div>
+                  <button onClick={() => deleteMemory(m.id)}>
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

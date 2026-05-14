@@ -1,19 +1,33 @@
-# Tanzai AI Multimodal V6
+# Tanzai AI Supabase V1
 
-Features:
-- Voice input using browser SpeechRecognition
-- Text-to-speech replies
-- Image upload preview
-- Image message UI
-- Streaming typing effect
-- Stop generating button
-- Local chat history
-- Connected to Syleri Engine
+Production foundation with:
+- Supabase Auth
+- Cloud chat history
+- Cloud memory
+- Feedback buttons
+- Syleri Engine API connection
+- SQL schema included
 
-Note:
-Current Syleri Engine /api/chat is text-first. Image data is sent in the request, but true vision analysis needs backend multimodal model support.
+## Setup
 
-Deploy:
+1. Create Supabase project.
+2. Open SQL Editor.
+3. Run `supabase/schema.sql`.
+4. In Cloud Run frontend variables add:
+
+VITE_SUPABASE_URL
+VITE_SUPABASE_ANON_KEY
+VITE_SYLERI_ENGINE_URL=https://engine.syleri.com
+
+5. Deploy.
+
+## Cloud Run
+
+Build command:
 npm install && npm run build
+
+Start command:
 npm start
-Port: 8080
+
+Port:
+8080
