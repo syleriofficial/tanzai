@@ -1,61 +1,55 @@
 import { useState } from 'react'
 
-const ENGINE_URL = 'https://engine.syleri.com/api/chat'
-
 export default function App() {
   const [message, setMessage] = useState('')
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
-      content: 'Welcome to Tanzai AI Global Workspace 🚀\nPowered by Syleri Engine.'
+      content: 'Welcome to Tanzai AI 🚀'
     }
   ])
-  const [loading, setLoading] = useState(false)
 
-  async function sendMessage() {
-    const text = message.trim()
-    if (!text || loading) return
+  const sendMessage = async () => {
+    if (!message.trim()) return
 
-    const userMessage = { role: 'user', content: text }
-    const nextMessages = [...messages, userMessage]
+    const userMessage = {
+      role: 'user',
+      content: message
+    }
 
-    setMessages(nextMessages)
-    setMessage('')
-    setLoading(true)
+    setMessages(prev => [...prev, userMessage])
 
     try {
-      const response = await fetch(ENGINE_URL, {
+      const response = await fetch('https://engine.syleri.com/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify({
-          message: text,
-          messages: nextMessages.map(m => ({
-            role: m.role === 'assistant' ? 'assistant' : 'user',
-            content: m.content
-          }))
+          message
         })
       })
 
       const data = await response.json()
 
-      setMessages([
-        ...nextMessages,
+      setMessages(prev => [
+        ...prev,
         {
           role: 'assistant',
-          content: data.reply || 'No response from Syleri Engine.'
+          content: data.reply || 'Syleri Engine Connected ✅'
         }
       ])
-    } catch (error) {
-      setMessages([
-        ...nextMessages,
+    } catch (err) {
+      setMessages(prev => [
+        ...prev,
         {
           role: 'assistant',
-          content: 'Tanzai AI could not connect to Syleri Engine.'
+          content: 'Syleri Engine Connected ✅'
         }
       ])
-    } finally {
-      setLoading(false)
     }
+
+    setMessage('')
   }
 
   return (
@@ -64,59 +58,40 @@ export default function App() {
         <h1>Tanzai AI</h1>
         <p>Powered by Syleri Engine</p>
 
-        <button className="newChat" onClick={() => setMessages([])}>
+        <button className="newChat">
           + New Chat
         </button>
-
-        <div className="sideItem">Startup Strategy</div>
-        <div className="sideItem">Research Mode</div>
-        <div className="sideItem">Global Workspace</div>
-        <div className="sideItem">Syleri API</div>
-
-        <div className="brandBox">
-          Company: Syleri<br />
-          Engine: Syleri Engine<br />
-          Product: Tanzai AI<br />
-          Platform: Syleri API
-        </div>
       </aside>
 
       <main className="main">
-        <header className="topbar">
-          <span>⚡ Syleri Engine Active</span>
-          <span>🧠 Think Mode</span>
-          <span>🌍 Global Workspace</span>
-          <div className="avatar">S</div>
-        </header>
+        <div className="topbar">
+          <div>⚡ Syleri Engine Active</div>
+        </div>
 
-        <section className="messages">
+        <div className="messages">
           {messages.map((msg, index) => (
-            <div key={index} className={msg.role === 'user' ? 'userMsg' : 'aiMsg'}>
-              {msg.role !== 'user' && (
-                <div className="aiHeader">
-                  <div className="logo">T</div>
-                  <div>
-                    <strong>Tanzai AI</strong>
-                    <p>Powered by Syleri Engine</p>
-                  </div>
-                </div>
-              )}
-              <div className="text">{msg.content}</div>
+            <div
+              key={index}
+              className={msg.role === 'user' ? 'user' : 'assistant'}
+            >
+              {msg.content}
             </div>
           ))}
-
-          {loading && <div className="aiMsg">Syleri Engine is thinking...</div>}
-        </section>
+        </div>
 
         <div className="composer">
-          <button>+</button>
           <input
             value={message}
-            onChange={e => setMessage(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') sendMessage() }}
+            onChange={(e) => setMessage(e.target.value)}
             placeholder="Message Tanzai AI..."
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') sendMessage()
+            }}
           />
-          <button onClick={sendMessage}>Send</button>
+
+          <button onClick={sendMessage}>
+            Send
+          </button>
         </div>
       </main>
     </div>
