@@ -1,6 +1,6 @@
 {
-  "name": "tanzai-ai-memory",
-  "version": "4.0.0",
+  "name": "tanzai-ai-streaming",
+  "version": "5.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",

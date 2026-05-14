@@ -1,12 +1,10 @@
-# Tanzai AI Memory V4
+# Tanzai AI Streaming V5
 
 Features:
-- LocalStorage chat history
-- New chat
-- Delete chat
-- Auto chat title
-- Local memory profile
-- Memory notes
+- Chat history with localStorage
+- Smooth streaming typing effect
+- Stop generating button
+- Copy answer
 - Syleri Engine connection
 
 Deploy:
