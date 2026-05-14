@@ -21,8 +21,13 @@ export default function App() {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          message
-        })
+  messages: [
+    {
+      role: "user",
+      content: message
+    }
+  ]
+})
       }
     )
 
