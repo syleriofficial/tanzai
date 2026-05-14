@@ -1,21 +1,15 @@
-# Tanzai AI V2 Pro
+# Tanzai AI Memory V4
 
-High quality React + Vite frontend for Tanzai AI.
+Features:
+- LocalStorage chat history
+- New chat
+- Delete chat
+- Auto chat title
+- Local memory profile
+- Memory notes
+- Syleri Engine connection
 
-## GitHub Root Files
-Upload all files/folders in this project root:
-
-- package.json
-- index.html
-- src/
-
-## Google Cloud Build Settings
-Build command:
+Deploy:
 npm install && npm run build
-
-Output folder:
-dist
-
-## Backend Connection
-This app calls:
-https://engine.syleri.com/api/chat
+npm start
+Port: 8080
