@@ -1,36 +1,91 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
-import "./index.css";
+import {
+  Send,
+  Sparkles,
+  Plus,
+  Trash2,
+  Copy
+} from "lucide-react";
+import "./style.css";
 
 const ENGINE_URL = "https://engine.syleri.com";
 
 function App() {
 
-  const [messages, setMessages] = useState([
-    {
-      role: "assistant",
-      content: "Namaste, main Tanzai AI hoon. Ask me anything."
-    }
-  ]);
-
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const defaultChat = {
+    id: Date.now(),
+    title: "New Chat",
+    messages: [
+      {
+        role: "bot",
+        text: "Namaste, main Tanzai AI hoon."
+      }
+    ]
+  };
+
+  const [chats, setChats] = useState(() => {
+    const saved = localStorage.getItem("tanzai_chats");
+
+    if (saved) {
+      return JSON.parse(saved);
+    }
+
+    return [defaultChat];
+  });
+
+  const [activeChatId, setActiveChatId] = useState(chats[0].id);
+
+  useEffect(() => {
+    localStorage.setItem(
+      "tanzai_chats",
+      JSON.stringify(chats)
+    );
+  }, [chats]);
+
+  const activeChat =
+    chats.find(c => c.id === activeChatId) || chats[0];
+
   async function sendMessage() {
 
-    if (!input.trim()) return;
+    const text = input.trim();
 
-    const userMessage = {
-      role: "user",
-      content: input
-    };
+    if (!text || loading) return;
 
-    setMessages((prev) => [...prev, userMessage]);
-
-    const text = input;
-
-    setInput("");
     setLoading(true);
+
+    const updatedChats = chats.map(chat => {
+
+      if (chat.id === activeChatId) {
+
+        const newMessages = [
+          ...chat.messages,
+          {
+            role: "user",
+            text
+          }
+        ];
+
+        return {
+          ...chat,
+          title:
+            chat.title === "New Chat"
+              ? text.slice(0, 25)
+              : chat.title,
+          messages: newMessages
+        };
+
+      }
+
+      return chat;
+
+    });
+
+    setChats(updatedChats);
+    setInput("");
 
     try {
 
@@ -49,29 +104,96 @@ function App() {
 
       const data = await res.json();
 
-      const aiMessage = {
-        role: "assistant",
-        content:
-          data.reply ||
-          "No response from Syleri Engine"
-      };
+      setChats(prev =>
+        prev.map(chat => {
 
-      setMessages((prev) => [...prev, aiMessage]);
+          if (chat.id === activeChatId) {
 
-    } catch (err) {
+            return {
+              ...chat,
+              messages: [
+                ...chat.messages,
+                {
+                  role: "bot",
+                  text:
+                    data.reply ||
+                    "No response"
+                }
+              ]
+            };
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content:
-            "Syleri Engine connection error"
-        }
-      ]);
+          }
+
+          return chat;
+
+        })
+      );
+
+    } catch {
+
+      setChats(prev =>
+        prev.map(chat => {
+
+          if (chat.id === activeChatId) {
+
+            return {
+              ...chat,
+              messages: [
+                ...chat.messages,
+                {
+                  role: "bot",
+                  text:
+                    "Engine connection error"
+                }
+              ]
+            };
+
+          }
+
+          return chat;
+
+        })
+      );
 
     }
 
     setLoading(false);
+
+  }
+
+  function newChat() {
+
+    const chat = {
+      id: Date.now(),
+      title: "New Chat",
+      messages: [
+        {
+          role: "bot",
+          text:
+            "Namaste, main Tanzai AI hoon."
+        }
+      ]
+    };
+
+    setChats(prev => [chat, ...prev]);
+    setActiveChatId(chat.id);
+
+  }
+
+  function deleteChat(id) {
+
+    const filtered =
+      chats.filter(c => c.id !== id);
+
+    if (filtered.length === 0) {
+
+      newChat();
+      return;
+
+    }
+
+    setChats(filtered);
+    setActiveChatId(filtered[0].id);
 
   }
 
@@ -80,9 +202,9 @@ function App() {
 
       <aside className="sidebar">
 
-        <div className="logoBox">
+        <div className="brand">
           <div className="logo">
-            ✦
+            <Sparkles size={22} />
           </div>
 
           <div>
@@ -93,124 +215,106 @@ function App() {
           </div>
         </div>
 
-        <button className="newChat">
-          + New Chat
+        <button
+          className="newBtn"
+          onClick={newChat}
+        >
+          <Plus size={18} />
+          New Chat
         </button>
 
-        <div className="recent">
-          <p className="recentTitle">
-            RECENT
-          </p>
-
-          <div className="recentItem">
-            Welcome chat
-          </div>
+        <div className="historyTitle">
+          RECENT CHATS
         </div>
 
-        <div className="engineStatus">
-          Engine:
-          {" "}
-          {ENGINE_URL}
+        <div className="historyList">
+
+          {chats.map(chat => (
+
+            <div
+              key={chat.id}
+              className={
+                chat.id === activeChatId
+                  ? "chatItem active"
+                  : "chatItem"
+              }
+            >
+
+              <button
+                className="chatSelect"
+                onClick={() =>
+                  setActiveChatId(chat.id)
+                }
+              >
+                {chat.title}
+              </button>
+
+              <button
+                className="deleteBtn"
+                onClick={() =>
+                  deleteChat(chat.id)
+                }
+              >
+                <Trash2 size={14} />
+              </button>
+
+            </div>
+
+          ))}
+
         </div>
 
       </aside>
 
       <main className="main">
 
-        <header className="topbar">
-
-          <div className="menuBtn">
-            ☰
-          </div>
-
-          <div>
-            <h2>Tanzai AI</h2>
-            <p>
-              Fast, modern, secure AI assistant
-            </p>
-          </div>
-
-          <div className="profile">
-            ⌾
-          </div>
-
-        </header>
-
-        <div className="hero">
-
-          <div className="heroBadge">
-            ⚡ Connected with Syleri Engine
-          </div>
-
-          <h1>
-            Build. Think. Create.
-          </h1>
-
-          <p>
-            Tanzai AI ka frontend yahan hai.
-            Real AI processing engine.syleri.com
-            par hogi.
-          </p>
-
-          <div className="heroTags">
-
-            <span>
-              🧠 Smart Chat
-            </span>
-
-            <span>
-              🛡 API Key Safe
-            </span>
-
-            <span>
-              🌍 Global Ready
-            </span>
-
-          </div>
-
+        <div className="topbar">
+          Tanzai AI
         </div>
 
-        <div className="chatArea">
+        <div className="messages">
 
-          {messages.map((msg, index) => (
+          {activeChat.messages.map(
+            (msg, index) => (
 
-            <div
-              key={index}
-              className={`message ${msg.role}`}
-            >
+              <div
+                key={index}
+                className={
+                  msg.role === "user"
+                    ? "message user"
+                    : "message bot"
+                }
+              >
 
-              <div className="avatar">
-                {msg.role === "assistant"
-                  ? "✦"
-                  : "👤"}
+                <div className="bubble">
+
+                  <p>{msg.text}</p>
+
+                  {msg.role === "bot" && (
+
+                    <button
+                      className="copyBtn"
+                      onClick={() =>
+                        navigator.clipboard.writeText(
+                          msg.text
+                        )
+                      }
+                    >
+                      <Copy size={14} />
+                    </button>
+
+                  )}
+
+                </div>
+
               </div>
 
-              <div className="bubble">
-
-                <p>
-                  {msg.content}
-                </p>
-
-                <button
-                  className="copyBtn"
-                  onClick={() =>
-                    navigator.clipboard.writeText(
-                      msg.content
-                    )
-                  }
-                >
-                  Copy
-                </button>
-
-              </div>
-
-            </div>
-
-          ))}
+            )
+          )}
 
           {loading && (
             <div className="typing">
-              Tanzai AI thinking...
+              Tanzai thinking...
             </div>
           )}
 
@@ -218,18 +322,13 @@ function App() {
 
         <div className="inputBar">
 
-          <button className="micBtn">
-            🎤
-          </button>
-
           <input
-            type="text"
-            placeholder="Ask Tanzai AI..."
             value={input}
-            onChange={(e) =>
+            onChange={e =>
               setInput(e.target.value)
             }
-            onKeyDown={(e) => {
+            placeholder="Ask Tanzai AI..."
+            onKeyDown={e => {
               if (e.key === "Enter") {
                 sendMessage();
               }
@@ -237,10 +336,9 @@ function App() {
           />
 
           <button
-            className="sendBtn"
             onClick={sendMessage}
           >
-            ➤ Send
+            <Send size={18} />
           </button>
 
         </div>

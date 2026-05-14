@@ -1,6 +1,6 @@
 {
-  "name": "tanzai-ai-v2-pro",
-  "version": "2.0.0",
+  "name": "tanzai-ai-history",
+  "version": "3.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
@@ -13,6 +13,5 @@
     "react": "latest",
     "react-dom": "latest",
     "lucide-react": "latest"
-  },
-  "devDependencies": {}
+  }
 }
