@@ -14,8 +14,7 @@ export default function App() {
 
     setMessages(prev => [...prev, userMessage])
 
-    const response = await fetch(
-      'https://engine.syleri.com/api/chat',
+    const response = await fetch("https://engine.syleri.com/api/chat")
       {
         method: 'POST',
         headers: {
