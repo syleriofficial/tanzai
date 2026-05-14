@@ -1,11 +1,17 @@
-# Tanzai AI Streaming V5
+# Tanzai AI Multimodal V6
 
 Features:
-- Chat history with localStorage
-- Smooth streaming typing effect
+- Voice input using browser SpeechRecognition
+- Text-to-speech replies
+- Image upload preview
+- Image message UI
+- Streaming typing effect
 - Stop generating button
-- Copy answer
-- Syleri Engine connection
+- Local chat history
+- Connected to Syleri Engine
+
+Note:
+Current Syleri Engine /api/chat is text-first. Image data is sent in the request, but true vision analysis needs backend multimodal model support.
 
 Deploy:
 npm install && npm run build

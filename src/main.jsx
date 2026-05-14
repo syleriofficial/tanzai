@@ -10,7 +10,11 @@ import {
   User,
   Menu,
   Square,
-  MessageSquare
+  MessageSquare,
+  Mic,
+  ImagePlus,
+  X,
+  Volume2
 } from "lucide-react";
 import "./style.css";
 
@@ -23,7 +27,7 @@ function createChat(title = "New Chat") {
     messages: [
       {
         role: "bot",
-        text: "Namaste, main Tanzai AI hoon. Main ChatGPT jaisa streaming typing effect de sakta hoon."
+        text: "Namaste, main Tanzai AI hoon. Aap text, voice aur image ke saath baat kar sakte ho."
       }
     ]
   };
@@ -33,16 +37,20 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [input, setInput] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [image, setImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState("");
   const stopRef = useRef(false);
   const bottomRef = useRef(null);
+  const recognitionRef = useRef(null);
 
   const [chats, setChats] = useState(() => {
-    const saved = localStorage.getItem("tanzai_stream_chats");
+    const saved = localStorage.getItem("tanzai_multimodal_chats");
     return saved ? JSON.parse(saved) : [createChat("Welcome chat")];
   });
 
   const [activeChatId, setActiveChatId] = useState(() => {
-    const saved = localStorage.getItem("tanzai_stream_active");
+    const saved = localStorage.getItem("tanzai_multimodal_active");
     return saved ? Number(saved) : null;
   });
 
@@ -51,19 +59,15 @@ function App() {
   }, [chats, activeChatId]);
 
   useEffect(() => {
-    if (!activeChat && chats.length > 0) {
-      setActiveChatId(chats[0].id);
-    }
+    if (!activeChat && chats.length > 0) setActiveChatId(chats[0].id);
   }, [activeChat, chats]);
 
   useEffect(() => {
-    localStorage.setItem("tanzai_stream_chats", JSON.stringify(chats));
+    localStorage.setItem("tanzai_multimodal_chats", JSON.stringify(chats));
   }, [chats]);
 
   useEffect(() => {
-    if (activeChat?.id) {
-      localStorage.setItem("tanzai_stream_active", String(activeChat.id));
-    }
+    if (activeChat?.id) localStorage.setItem("tanzai_multimodal_active", String(activeChat.id));
   }, [activeChat]);
 
   useEffect(() => {
@@ -72,9 +76,7 @@ function App() {
 
   function updateActiveChat(updater) {
     setChats((prev) =>
-      prev.map((chat) =>
-        chat.id === activeChat.id ? updater(chat) : chat
-      )
+      prev.map((chat) => (chat.id === activeChat.id ? updater(chat) : chat))
     );
   }
 
@@ -92,16 +94,76 @@ function App() {
       setActiveChatId(fresh.id);
       return;
     }
-
     setChats(next);
-
-    if (id === activeChat.id) {
-      setActiveChatId(next[0].id);
-    }
+    if (id === activeChat.id) setActiveChatId(next[0].id);
   }
 
   function copyText(text) {
     navigator.clipboard.writeText(text);
+  }
+
+  function speakText(text) {
+    if (!("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "hi-IN";
+    utterance.rate = 1;
+    window.speechSynthesis.speak(utterance);
+  }
+
+  function startVoiceInput() {
+    const SpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      alert("Voice input is not supported in this browser. Chrome use karo.");
+      return;
+    }
+
+    if (listening && recognitionRef.current) {
+      recognitionRef.current.stop();
+      setListening(false);
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = "hi-IN";
+    recognition.interimResults = true;
+    recognition.continuous = false;
+
+    recognition.onstart = () => setListening(true);
+
+    recognition.onresult = (event) => {
+      let transcript = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        transcript += event.results[i][0].transcript;
+      }
+      setInput(transcript);
+    };
+
+    recognition.onerror = () => setListening(false);
+    recognition.onend = () => setListening(false);
+
+    recognitionRef.current = recognition;
+    recognition.start();
+  }
+
+  function handleImageUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImage(file);
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setImagePreview(reader.result);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function removeImage() {
+    setImage(null);
+    setImagePreview("");
   }
 
   async function typeReply(fullText) {
@@ -125,13 +187,10 @@ function App() {
           };
         }
 
-        return {
-          ...chat,
-          messages: nextMessages
-        };
+        return { ...chat, messages: nextMessages };
       });
 
-      await new Promise((resolve) => setTimeout(resolve, 12));
+      await new Promise((resolve) => setTimeout(resolve, 10));
     }
 
     updateActiveChat((chat) => {
@@ -145,32 +204,32 @@ function App() {
         };
       }
 
-      return {
-        ...chat,
-        messages: nextMessages
-      };
+      return { ...chat, messages: nextMessages };
     });
   }
 
   async function sendMessage() {
     const text = input.trim();
-
-    if (!text || isGenerating || !activeChat) return;
+    if ((!text && !imagePreview) || isGenerating || !activeChat) return;
 
     stopRef.current = false;
     setIsGenerating(true);
+
+    const userText = text || "Analyze this image.";
+    const imageData = imagePreview;
 
     updateActiveChat((chat) => ({
       ...chat,
       title:
         chat.title === "New Chat" || chat.title === "Welcome chat"
-          ? text.slice(0, 34)
+          ? userText.slice(0, 34)
           : chat.title,
       messages: [
         ...chat.messages,
         {
           role: "user",
-          text
+          text: userText,
+          image: imageData
         },
         {
           role: "bot",
@@ -181,20 +240,26 @@ function App() {
     }));
 
     setInput("");
+    setImage(null);
+    setImagePreview("");
 
     try {
+      const prompt = imageData
+        ? `${userText}\n\nUser attached an image. Current Syleri Engine text endpoint does not yet process raw image data. Reply with guidance based on the user's text and ask them to describe the image if needed.`
+        : userText;
+
       const res = await fetch(`${ENGINE_URL}/api/chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          message: text
+          message: prompt,
+          image: imageData
         })
       });
 
       const data = await res.json();
-
       await typeReply(data.reply || "Tanzai AI reply unavailable.");
     } catch (error) {
       await typeReply("Syleri Engine connection error.");
@@ -216,10 +281,9 @@ function App() {
           <div className="logo">
             <Sparkles size={22} />
           </div>
-
           <div>
             <h1>Tanzai AI</h1>
-            <p>Streaming V5</p>
+            <p>Multimodal V6</p>
           </div>
         </div>
 
@@ -262,7 +326,7 @@ function App() {
 
           <div>
             <h2>Tanzai AI</h2>
-            <p>Live typing response powered by Syleri Engine</p>
+            <p>Text + Voice + Image interface powered by Syleri Engine</p>
           </div>
 
           <button className="profileBtn">
@@ -273,12 +337,19 @@ function App() {
         <section className="hero">
           <div className="pill">
             <Brain size={16} />
-            Streaming Reply Active
+            Multimodal Interface Active
           </div>
-          <h3>Answers feel alive.</h3>
+          <h3>Talk. Upload. Create.</h3>
           <p>
-            Response engine se aane ke baad Tanzai AI usko smooth typing effect ke saath dikhata hai.
+            Tanzai AI ab voice input, image upload preview, streaming response aur chat history ke saath ready hai.
           </p>
+
+          <div className="featureRow">
+            <span>🎤 Voice Input</span>
+            <span>🖼 Image Upload</span>
+            <span>⚡ Streaming</span>
+            <span>💾 History</span>
+          </div>
         </section>
 
         <section className="messages">
@@ -289,16 +360,23 @@ function App() {
               </div>
 
               <div className="bubble">
+                {msg.image && <img className="bubbleImage" src={msg.image} alt="uploaded" />}
                 <p>
                   {msg.text}
                   {msg.streaming && <span className="cursor">|</span>}
                 </p>
 
                 {msg.role === "bot" && msg.text && (
-                  <button className="copyBtn" onClick={() => copyText(msg.text)}>
-                    <Copy size={14} />
-                    Copy
-                  </button>
+                  <div className="messageActions">
+                    <button className="copyBtn" onClick={() => copyText(msg.text)}>
+                      <Copy size={14} />
+                      Copy
+                    </button>
+                    <button className="copyBtn" onClick={() => speakText(msg.text)}>
+                      <Volume2 size={14} />
+                      Speak
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -307,7 +385,28 @@ function App() {
           <div ref={bottomRef}></div>
         </section>
 
+        {imagePreview && (
+          <div className="imagePreview">
+            <img src={imagePreview} alt="preview" />
+            <button onClick={removeImage}>
+              <X size={16} />
+            </button>
+          </div>
+        )}
+
         <footer className="composer">
+          <label className="toolBtn">
+            <ImagePlus size={20} />
+            <input type="file" accept="image/*" onChange={handleImageUpload} />
+          </label>
+
+          <button
+            className={`toolBtn ${listening ? "listening" : ""}`}
+            onClick={startVoiceInput}
+          >
+            <Mic size={20} />
+          </button>
+
           <input
             value={input}
             disabled={isGenerating}
@@ -324,7 +423,7 @@ function App() {
               Stop
             </button>
           ) : (
-            <button onClick={sendMessage}>
+            <button className="sendBtn" onClick={sendMessage}>
               <Send size={18} />
               Send
             </button>
