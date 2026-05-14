@@ -7,8 +7,8 @@ export default defineConfig({
     host: "0.0.0.0",
     port: 8080,
     allowedHosts: [
-      "tanzaiai.com",
-      "www.tanzaiai.com",
+      "status.syleri.com",
+      "admin.syleri.com",
       ".run.app"
     ]
   }

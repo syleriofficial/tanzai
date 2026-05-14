@@ -1,25 +1,40 @@
-# Tanzai AI Supabase V1
+# Syleri Admin Dashboard V1
 
-Production foundation with:
-- Supabase Auth
-- Cloud chat history
-- Cloud memory
-- Feedback buttons
-- Syleri Engine API connection
-- SQL schema included
+Admin dashboard for Tanzai AI + Syleri Engine.
 
-## Setup
+## Features
 
-1. Create Supabase project.
-2. Open SQL Editor.
-3. Run `supabase/schema.sql`.
-4. In Cloud Run frontend variables add:
+- Supabase admin login
+- Total users count
+- Total chats count
+- Total messages count
+- Total memories count
+- Good/bad feedback count
+- Recent messages
+- Recent feedback
+- Syleri Engine health
+- Dataset Builder preview
 
-VITE_SUPABASE_URL
-VITE_SUPABASE_ANON_KEY
+## Required env variables
+
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+VITE_ADMIN_EMAIL=your_admin_email@example.com
+
+Optional:
+
 VITE_SYLERI_ENGINE_URL=https://engine.syleri.com
+VITE_DATASET_BUILDER_URL=https://your-dataset-builder.run.app
+VITE_DATASET_ADMIN_TOKEN=your_dataset_admin_token
 
-5. Deploy.
+## Important
+
+This dashboard uses Supabase anon key and RLS. 
+For real production, keep admin access restricted by:
+- VITE_ADMIN_EMAIL check
+- Supabase RLS policies
+- deploy dashboard on private/admin domain
+- never expose service role key in frontend
 
 ## Cloud Run
 

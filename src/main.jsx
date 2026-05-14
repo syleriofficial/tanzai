@@ -1,49 +1,49 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import ReactDOM from "react-dom/client";
 import {
-  Sparkles,
-  Send,
-  Plus,
-  Trash2,
-  Copy,
+  Activity,
+  BarChart3,
   Brain,
-  User,
-  Menu,
-  MessageSquare,
-  LogOut,
-  ThumbsUp,
-  ThumbsDown,
-  Save,
   Database,
-  KeyRound
+  Download,
+  KeyRound,
+  LogOut,
+  MessageSquare,
+  RefreshCw,
+  Server,
+  Shield,
+  Sparkles,
+  ThumbsDown,
+  ThumbsUp,
+  Users
 } from "lucide-react";
 import { supabase, supabaseReady } from "./supabaseClient";
 import "./style.css";
 
-const ENGINE_URL =
-  import.meta.env.VITE_SYLERI_ENGINE_URL || "https://engine.syleri.com";
+const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || "";
+const ENGINE_URL = import.meta.env.VITE_SYLERI_ENGINE_URL || "https://engine.syleri.com";
+const DATASET_URL = import.meta.env.VITE_DATASET_BUILDER_URL || "";
+const DATASET_TOKEN = import.meta.env.VITE_DATASET_ADMIN_TOKEN || "";
 
-function fallbackChat() {
-  return {
-    id: "local-" + Date.now(),
-    title: "Welcome chat",
-    messages: [
-      {
-        id: "local-msg-" + Date.now(),
-        role: "assistant",
-        content: "Namaste, main Tanzai AI hoon. Supabase cloud memory ready hai."
-      }
-    ]
-  };
+function StatCard({ icon, label, value, note }) {
+  return (
+    <div className="statCard">
+      <div className="statIcon">{icon}</div>
+      <div>
+        <p>{label}</p>
+        <h2>{value}</h2>
+        {note && <span>{note}</span>}
+      </div>
+    </div>
+  );
 }
 
 function AuthScreen() {
-  const [mode, setMode] = useState("signin");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(ADMIN_EMAIL);
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState("");
 
-  async function submit(e) {
+  async function signIn(e) {
     e.preventDefault();
     setStatus("");
 
@@ -52,51 +52,41 @@ function AuthScreen() {
       return;
     }
 
-    const action =
-      mode === "signin"
-        ? supabase.auth.signInWithPassword({ email, password })
-        : supabase.auth.signUp({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    });
 
-    const { error } = await action;
-
-    if (error) {
-      setStatus(error.message);
-    } else {
-      setStatus(mode === "signin" ? "Signed in." : "Signup done. Check email if confirmation is enabled.");
-    }
+    if (error) setStatus(error.message);
   }
 
   return (
     <div className="authPage">
       <div className="authCard">
-        <div className="authLogo">
-          <Sparkles size={28} />
+        <div className="logoBig">
+          <Shield size={30} />
         </div>
-        <h1>Tanzai AI</h1>
-        <p>Cloud memory + chat history powered by Supabase and Syleri Engine.</p>
+        <h1>Syleri Admin</h1>
+        <p>Secure dashboard for Tanzai AI metrics, feedback and dataset export.</p>
 
-        <form onSubmit={submit}>
-          <label>Email</label>
-          <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@email.com" />
+        <form onSubmit={signIn}>
+          <label>Admin Email</label>
+          <input value={email} onChange={(e) => setEmail(e.target.value)} />
 
           <label>Password</label>
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="minimum 6 characters" />
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
 
-          <button type="submit">
+          <button>
             <KeyRound size={18} />
-            {mode === "signin" ? "Sign in" : "Create account"}
+            Sign in
           </button>
         </form>
 
-        <button className="ghostBtn" onClick={() => setMode(mode === "signin" ? "signup" : "signin")}>
-          {mode === "signin" ? "Need account? Sign up" : "Already have account? Sign in"}
-        </button>
-
-        {status && <div className="statusBox">{status}</div>}
+        {status && <div className="warning">{status}</div>}
 
         {!supabaseReady && (
-          <div className="warningBox">
-            Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Cloud Run variables.
+          <div className="warning">
+            Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.
           </div>
         )}
       </div>
@@ -106,314 +96,149 @@ function AuthScreen() {
 
 function App() {
   const [session, setSession] = useState(null);
-  const [loadingApp, setLoadingApp] = useState(true);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [memoryOpen, setMemoryOpen] = useState(false);
-  const [input, setInput] = useState("");
-  const [generating, setGenerating] = useState(false);
-  const [chats, setChats] = useState([fallbackChat()]);
-  const [activeChatId, setActiveChatId] = useState(null);
-  const [profile, setProfile] = useState(null);
-  const [memories, setMemories] = useState([]);
-  const [memoryText, setMemoryText] = useState("");
-  const bottomRef = useRef(null);
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({
+    profiles: 0,
+    chats: 0,
+    messages: 0,
+    memories: 0,
+    good: 0,
+    bad: 0
+  });
+  const [recentMessages, setRecentMessages] = useState([]);
+  const [recentFeedback, setRecentFeedback] = useState([]);
+  const [engineHealth, setEngineHealth] = useState(null);
+  const [datasetPreview, setDatasetPreview] = useState(null);
+  const [error, setError] = useState("");
 
-  const user = session?.user || null;
+  const user = session?.user;
 
-  const activeChat = useMemo(() => {
-    return chats.find((c) => c.id === activeChatId) || chats[0];
-  }, [chats, activeChatId]);
+  const isAdmin = useMemo(() => {
+    if (!ADMIN_EMAIL) return true;
+    return user?.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+  }, [user]);
 
   useEffect(() => {
     async function init() {
       if (!supabaseReady) {
-        setLoadingApp(false);
+        setLoading(false);
         return;
       }
 
       const { data } = await supabase.auth.getSession();
       setSession(data.session);
 
-      const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
-        setSession(newSession);
+      supabase.auth.onAuthStateChange((_event, nextSession) => {
+        setSession(nextSession);
       });
 
-      setLoadingApp(false);
-
-      return () => listener.subscription.unsubscribe();
+      setLoading(false);
     }
 
     init();
   }, []);
 
   useEffect(() => {
-    if (user) {
-      loadCloudData();
+    if (user && isAdmin) {
+      refreshAll();
     }
-  }, [user?.id]);
+  }, [user?.id, isAdmin]);
 
-  useEffect(() => {
-    if (activeChat?.id) setActiveChatId(activeChat.id);
-  }, [activeChat?.id]);
+  async function countTable(table, filter) {
+    let query = supabase.from(table).select("*", { count: "exact", head: true });
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [activeChat?.messages, generating]);
+    if (filter) {
+      query = query.eq(filter.column, filter.value);
+    }
 
-  async function loadCloudData() {
-    if (!user || !supabaseReady) return;
+    const { count, error } = await query;
+    if (error) return 0;
+    return count || 0;
+  }
 
-    const { data: profileData } = await supabase
-      .from("tanzai_profiles")
-      .select("*")
-      .eq("id", user.id)
-      .maybeSingle();
+  async function loadStats() {
+    const [profiles, chats, messages, memories, good, bad] = await Promise.all([
+      countTable("tanzai_profiles"),
+      countTable("tanzai_chats"),
+      countTable("tanzai_messages"),
+      countTable("tanzai_memories"),
+      countTable("tanzai_feedback", { column: "rating", value: "good" }),
+      countTable("tanzai_feedback", { column: "rating", value: "bad" })
+    ]);
 
-    setProfile(profileData);
+    setStats({ profiles, chats, messages, memories, good, bad });
+  }
 
-    const { data: chatData } = await supabase
-      .from("tanzai_chats")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("updated_at", { ascending: false });
+  async function loadRecent() {
+    const { data: messages } = await supabase
+      .from("tanzai_messages")
+      .select("id,role,content,created_at,user_id")
+      .order("created_at", { ascending: false })
+      .limit(8);
 
-    if (!chatData || chatData.length === 0) {
-      const { data: newChat } = await supabase
-        .from("tanzai_chats")
-        .insert({ user_id: user.id, title: "Welcome chat" })
-        .select()
-        .single();
+    const { data: feedback } = await supabase
+      .from("tanzai_feedback")
+      .select("id,rating,note,created_at,message_id,user_id")
+      .order("created_at", { ascending: false })
+      .limit(8);
 
-      await supabase.from("tanzai_messages").insert({
-        chat_id: newChat.id,
-        user_id: user.id,
-        role: "assistant",
-        content: "Namaste, main Tanzai AI hoon. Aapki cloud history ready hai."
+    setRecentMessages(messages || []);
+    setRecentFeedback(feedback || []);
+  }
+
+  async function checkEngine() {
+    try {
+      const res = await fetch(`${ENGINE_URL}/health`);
+      const data = await res.json();
+      setEngineHealth({
+        ok: res.ok,
+        data
       });
-
-      return loadCloudData();
+    } catch (e) {
+      setEngineHealth({
+        ok: false,
+        data: { error: e.message }
+      });
     }
-
-    const chatIds = chatData.map((c) => c.id);
-
-    const { data: messageData } = await supabase
-      .from("tanzai_messages")
-      .select("*")
-      .in("chat_id", chatIds)
-      .order("created_at", { ascending: true });
-
-    const mapped = chatData.map((chat) => ({
-      ...chat,
-      messages: (messageData || [])
-        .filter((m) => m.chat_id === chat.id)
-        .map((m) => ({
-          id: m.id,
-          role: m.role === "assistant" ? "assistant" : "user",
-          content: m.content
-        }))
-    }));
-
-    setChats(mapped);
-    setActiveChatId(mapped[0]?.id);
-
-    const { data: memData } = await supabase
-      .from("tanzai_memories")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("importance", { ascending: false });
-
-    setMemories(memData || []);
   }
 
-  async function newChat() {
-    if (!user || !supabaseReady) return;
-
-    const { data } = await supabase
-      .from("tanzai_chats")
-      .insert({ user_id: user.id, title: "New Chat" })
-      .select()
-      .single();
-
-    const welcome = await supabase
-      .from("tanzai_messages")
-      .insert({
-        chat_id: data.id,
-        user_id: user.id,
-        role: "assistant",
-        content: "New chat started. Ask Tanzai AI anything."
-      })
-      .select()
-      .single();
-
-    const chat = {
-      ...data,
-      messages: [
-        {
-          id: welcome.data.id,
-          role: "assistant",
-          content: welcome.data.content
-        }
-      ]
-    };
-
-    setChats((prev) => [chat, ...prev]);
-    setActiveChatId(chat.id);
-  }
-
-  async function deleteChat(id) {
-    if (!supabaseReady) return;
-    await supabase.from("tanzai_chats").delete().eq("id", id);
-    const next = chats.filter((c) => c.id !== id);
-    setChats(next);
-    if (next.length) setActiveChatId(next[0].id);
-    else await newChat();
-  }
-
-  function buildMemoryPrompt(text) {
-    const memoryBlock = memories.map((m) => `- ${m.content}`).join("\n");
-    return `User message: ${text}
-
-User profile:
-Name/email: ${profile?.display_name || user?.email || "unknown"}
-Preferred language: ${profile?.preferred_language || "Hinglish / Hindi"}
-Tone: ${profile?.tone || "clear and helpful"}
-Goals: ${profile?.goals || "Build Tanzai AI"}
-
-Saved memories:
-${memoryBlock || "- No memory saved yet."}
-
-Reply naturally in user's language and use memory only when useful.`;
-  }
-
-  async function saveMessage(role, content, chatId = activeChat.id) {
-    const { data } = await supabase
-      .from("tanzai_messages")
-      .insert({
-        chat_id: chatId,
-        user_id: user.id,
-        role,
-        content
-      })
-      .select()
-      .single();
-
-    return data;
-  }
-
-  async function sendMessage() {
-    const text = input.trim();
-    if (!text || generating || !activeChat || !user || !supabaseReady) return;
-
-    setInput("");
-    setGenerating(true);
-
-    const userMsg = { id: "temp-user-" + Date.now(), role: "user", content: text };
-    const tempBot = { id: "temp-bot-" + Date.now(), role: "assistant", content: "Tanzai thinking..." };
-
-    setChats((prev) =>
-      prev.map((chat) =>
-        chat.id === activeChat.id
-          ? {
-              ...chat,
-              title: chat.title === "New Chat" || chat.title === "Welcome chat" ? text.slice(0, 38) : chat.title,
-              messages: [...chat.messages, userMsg, tempBot]
-            }
-          : chat
-      )
-    );
+  async function loadDatasetPreview() {
+    if (!DATASET_URL || !DATASET_TOKEN) {
+      setDatasetPreview({
+        count: 0,
+        note: "Dataset builder URL/token not configured."
+      });
+      return;
+    }
 
     try {
-      await saveMessage("user", text);
-
-      await supabase
-        .from("tanzai_chats")
-        .update({
-          title: activeChat.title === "New Chat" || activeChat.title === "Welcome chat" ? text.slice(0, 38) : activeChat.title,
-          updated_at: new Date().toISOString()
-        })
-        .eq("id", activeChat.id);
-
-      const res = await fetch(`${ENGINE_URL}/api/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: buildMemoryPrompt(text) })
+      const res = await fetch(`${DATASET_URL}/admin/dataset/preview?limit=20`, {
+        headers: {
+          Authorization: `Bearer ${DATASET_TOKEN}`
+        }
       });
-
       const data = await res.json();
-      const reply = data.reply || "Tanzai AI reply unavailable.";
-
-      const savedBot = await saveMessage("assistant", reply);
-
-      setChats((prev) =>
-        prev.map((chat) =>
-          chat.id === activeChat.id
-            ? {
-                ...chat,
-                messages: chat.messages.map((m) =>
-                  m.id === tempBot.id
-                    ? { id: savedBot.id, role: "assistant", content: reply }
-                    : m
-                )
-              }
-            : chat
-        )
-      );
-    } catch (error) {
-      setChats((prev) =>
-        prev.map((chat) =>
-          chat.id === activeChat.id
-            ? {
-                ...chat,
-                messages: chat.messages.map((m) =>
-                  m.id === tempBot.id
-                    ? { ...m, content: "Syleri Engine or Supabase error." }
-                    : m
-                )
-              }
-            : chat
-        )
-      );
-    } finally {
-      setGenerating(false);
+      setDatasetPreview(data);
+    } catch (e) {
+      setDatasetPreview({
+        count: 0,
+        error: e.message
+      });
     }
   }
 
-  async function saveMemory() {
-    const content = memoryText.trim();
-    if (!content || !user || !supabaseReady) return;
-
-    const { data } = await supabase
-      .from("tanzai_memories")
-      .insert({
-        user_id: user.id,
-        memory_type: "manual",
-        content,
-        importance: 8
-      })
-      .select()
-      .single();
-
-    setMemories((prev) => [data, ...prev]);
-    setMemoryText("");
-  }
-
-  async function deleteMemory(id) {
-    await supabase.from("tanzai_memories").delete().eq("id", id);
-    setMemories((prev) => prev.filter((m) => m.id !== id));
-  }
-
-  async function feedback(messageId, rating) {
-    if (!messageId || String(messageId).startsWith("temp")) return;
-
-    await supabase.from("tanzai_feedback").insert({
-      user_id: user.id,
-      message_id: messageId,
-      rating
-    });
-  }
-
-  function copyText(text) {
-    navigator.clipboard.writeText(text);
+  async function refreshAll() {
+    setError("");
+    try {
+      await Promise.all([
+        loadStats(),
+        loadRecent(),
+        checkEngine(),
+        loadDatasetPreview()
+      ]);
+    } catch (e) {
+      setError(e.message);
+    }
   }
 
   async function signOut() {
@@ -421,176 +246,176 @@ Reply naturally in user's language and use memory only when useful.`;
     setSession(null);
   }
 
-  if (loadingApp) return <div className="loading">Loading Tanzai AI...</div>;
+  function downloadDataset() {
+    if (!DATASET_URL || !DATASET_TOKEN) {
+      alert("Dataset builder URL/token not configured.");
+      return;
+    }
+
+    alert("Open this in browser with Authorization header using Postman/curl, because browser download cannot attach secret header safely.");
+  }
+
+  if (loading) return <div className="loading">Loading Syleri Admin...</div>;
 
   if (!session) return <AuthScreen />;
 
+  if (!isAdmin) {
+    return (
+      <div className="authPage">
+        <div className="authCard">
+          <div className="logoBig">
+            <Shield size={30} />
+          </div>
+          <h1>Access denied</h1>
+          <p>This dashboard is only for the configured admin email.</p>
+          <button onClick={signOut}>
+            <LogOut size={18} />
+            Sign out
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="app">
-      <aside className={`sidebar ${sidebarOpen ? "open" : "closed"}`}>
+      <aside className="sidebar">
         <div className="brand">
           <div className="logo">
             <Sparkles size={22} />
           </div>
           <div>
-            <h1>Tanzai AI</h1>
-            <p>Cloud Memory V7</p>
+            <h1>Syleri Admin</h1>
+            <p>Tanzai AI Control Center</p>
           </div>
         </div>
 
-        <button className="primaryBtn" onClick={newChat}>
-          <Plus size={18} />
-          New Chat
-        </button>
-
-        <button className="memoryBtn" onClick={() => setMemoryOpen(true)}>
-          <Database size={18} />
-          Cloud Memory
-        </button>
-
-        <div className="smallTitle">Recent Chats</div>
-
-        <div className="chatList">
-          {chats.map((chat) => (
-            <div key={chat.id} className={`chatItem ${chat.id === activeChat?.id ? "active" : ""}`}>
-              <button onClick={() => setActiveChatId(chat.id)}>
-                <MessageSquare size={15} />
-                <span>{chat.title}</span>
-              </button>
-              <button className="danger" onClick={() => deleteChat(chat.id)}>
-                <Trash2 size={14} />
-              </button>
-            </div>
-          ))}
+        <div className="navItem active">
+          <BarChart3 size={18} />
+          Overview
         </div>
 
-        <button className="logoutBtn" onClick={signOut}>
-          <LogOut size={16} />
+        <div className="navItem">
+          <Database size={18} />
+          Dataset
+        </div>
+
+        <div className="navItem">
+          <Server size={18} />
+          Engine Health
+        </div>
+
+        <button className="logout" onClick={signOut}>
+          <LogOut size={17} />
           Sign out
         </button>
       </aside>
 
       <main className="main">
         <header className="topbar">
-          <button className="iconBtn" onClick={() => setSidebarOpen(!sidebarOpen)}>
-            <Menu size={22} />
-          </button>
-
           <div>
-            <h2>Tanzai AI</h2>
-            <p>Supabase cloud memory + Syleri Engine</p>
+            <h2>Admin Dashboard</h2>
+            <p>Users, chats, memory, feedback and dataset readiness.</p>
           </div>
 
-          <button className="profileBtn" onClick={() => setMemoryOpen(true)}>
-            <User size={18} />
+          <button onClick={refreshAll}>
+            <RefreshCw size={17} />
+            Refresh
           </button>
         </header>
 
+        {error && <div className="errorBox">{error}</div>}
+
         <section className="hero">
           <div className="pill">
-            <Brain size={16} />
-            Cloud Memory Active
+            <Activity size={16} />
+            System Overview
           </div>
-          <h3>Train the future Syleri Engine.</h3>
+          <h3>Syleri Engine is becoming data-ready.</h3>
           <p>
-            Chats, memory and feedback save hote hain. Ye future me better routing, personalization aur training dataset ka foundation banega.
+            Track Tanzai users, feedback, memories and dataset quality before future fine-tuning.
           </p>
         </section>
 
-        <section className="messages">
-          {activeChat?.messages?.map((msg) => (
-            <div key={msg.id} className={`messageRow ${msg.role === "assistant" ? "bot" : "user"}`}>
-              <div className="avatar">
-                {msg.role === "assistant" ? <Sparkles size={16} /> : <User size={16} />}
-              </div>
-
-              <div className="bubble">
-                <p>{msg.content}</p>
-
-                {msg.role === "assistant" && (
-                  <div className="messageActions">
-                    <button className="copyBtn" onClick={() => copyText(msg.content)}>
-                      <Copy size={14} />
-                      Copy
-                    </button>
-                    <button className="copyBtn" onClick={() => feedback(msg.id, "good")}>
-                      <ThumbsUp size={14} />
-                      Good
-                    </button>
-                    <button className="copyBtn" onClick={() => feedback(msg.id, "bad")}>
-                      <ThumbsDown size={14} />
-                      Bad
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-          <div ref={bottomRef}></div>
+        <section className="grid statsGrid">
+          <StatCard icon={<Users size={22} />} label="Users" value={stats.profiles} note="Supabase profiles" />
+          <StatCard icon={<MessageSquare size={22} />} label="Chats" value={stats.chats} note="Cloud conversations" />
+          <StatCard icon={<Database size={22} />} label="Messages" value={stats.messages} note="Training source" />
+          <StatCard icon={<Brain size={22} />} label="Memories" value={stats.memories} note="Personalization" />
+          <StatCard icon={<ThumbsUp size={22} />} label="Good Feedback" value={stats.good} note="Dataset candidates" />
+          <StatCard icon={<ThumbsDown size={22} />} label="Bad Feedback" value={stats.bad} note="Improve answers" />
         </section>
 
-        <footer className="composer">
-          <input
-            value={input}
-            disabled={generating}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") sendMessage();
-            }}
-            placeholder={generating ? "Tanzai is thinking..." : "Ask Tanzai AI..."}
-          />
+        <section className="twoCol">
+          <div className="panel">
+            <div className="panelHead">
+              <h3>Syleri Engine Health</h3>
+              <Server size={20} />
+            </div>
+            <div className={engineHealth?.ok ? "health good" : "health bad"}>
+              {engineHealth?.ok ? "ONLINE" : "CHECK"}
+            </div>
+            <pre>{JSON.stringify(engineHealth?.data || {}, null, 2)}</pre>
+          </div>
 
-          <button onClick={sendMessage} disabled={generating}>
-            <Send size={18} />
-            Send
-          </button>
-        </footer>
-      </main>
-
-      {memoryOpen && (
-        <div className="modalOverlay">
-          <div className="memoryModal">
-            <div className="modalHead">
-              <div>
-                <h2>Cloud Memory</h2>
-                <p>Stored securely in Supabase for this signed-in user.</p>
-              </div>
-              <button className="iconBtn" onClick={() => setMemoryOpen(false)}>×</button>
+          <div className="panel">
+            <div className="panelHead">
+              <h3>Dataset Builder</h3>
+              <Download size={20} />
             </div>
 
-            <div className="profileBox">
-              <h3>{profile?.display_name || user.email}</h3>
-              <p>{profile?.preferred_language || "Hinglish / Hindi"} · {profile?.tone || "clear helpful"}</p>
+            <div className="datasetCount">
+              {datasetPreview?.count ?? 0}
+              <span>ready examples</span>
             </div>
 
-            <div className="addNote">
-              <textarea
-                value={memoryText}
-                onChange={(e) => setMemoryText(e.target.value)}
-                placeholder="Save memory: User likes Hindi replies, working on Syleri Engine..."
-              />
-              <button onClick={saveMemory}>
-                <Save size={16} />
-                Save
-              </button>
+            <pre>{JSON.stringify(datasetPreview || {}, null, 2)}</pre>
+
+            <button className="secondaryBtn" onClick={downloadDataset}>
+              <Download size={17} />
+              Export JSONL
+            </button>
+          </div>
+        </section>
+
+        <section className="twoCol">
+          <div className="panel">
+            <div className="panelHead">
+              <h3>Recent Messages</h3>
+              <MessageSquare size={20} />
             </div>
 
-            <div className="notes">
-              {memories.map((m) => (
-                <div className="note" key={m.id}>
-                  <div>
-                    <p>{m.content}</p>
-                    <small>Importance {m.importance} · {m.memory_type}</small>
-                  </div>
-                  <button onClick={() => deleteMemory(m.id)}>
-                    <Trash2 size={14} />
-                  </button>
+            <div className="list">
+              {recentMessages.map((m) => (
+                <div className="row" key={m.id}>
+                  <strong>{m.role}</strong>
+                  <p>{m.content}</p>
+                  <span>{new Date(m.created_at).toLocaleString()}</span>
                 </div>
               ))}
             </div>
           </div>
-        </div>
-      )}
+
+          <div className="panel">
+            <div className="panelHead">
+              <h3>Recent Feedback</h3>
+              <ThumbsUp size={20} />
+            </div>
+
+            <div className="list">
+              {recentFeedback.map((f) => (
+                <div className="row" key={f.id}>
+                  <strong className={f.rating === "good" ? "greenText" : "redText"}>
+                    {f.rating}
+                  </strong>
+                  <p>{f.note || "No note"}</p>
+                  <span>{new Date(f.created_at).toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      </main>
     </div>
   );
 }
