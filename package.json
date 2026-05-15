@@ -1,6 +1,6 @@
 {
-  "name": "tanzai-ai-full-ui-v1",
-  "version": "8.0.0",
+  "name": "tanzai-ai-cloud-memory-v1",
+  "version": "9.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
