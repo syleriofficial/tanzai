@@ -3,13 +3,14 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
+  server: {
+    host: "0.0.0.0",
+    port: 8080,
+    allowedHosts: ["tanzaiai.com"],
+  },
   preview: {
     host: "0.0.0.0",
     port: 8080,
-    allowedHosts: [
-      "status.syleri.com",
-      "admin.syleri.com",
-      ".run.app"
-    ]
-  }
+    allowedHosts: ["tanzaiai.com"],
+  },
 });
